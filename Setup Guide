@@ -1,0 +1,68 @@
+NS-3 IoT Simulation Setup Guide
+This guide will help you set up your environment, download the necessary tools, and run the IoT network simulation using the provided IOT.cc source code.
+
+Prerequisites
+NS-3 Installation: Ensure that NS-3 is installed on your system. You can download NS-3 from here. You can use the following steps to install NS-3:
+
+    sudo apt-get update
+    sudo apt-get install g++ python3 cmake libc6-dev libc6-dev-i386 libclang-dev llvm-dev
+    sudo apt-get install qtbase5-dev
+    wget https://www.nsnam.org/release/ns-allinone-3.xx.tar.bz2
+    tar xjf ns-allinone-3.xx.tar.bz2
+    cd ns-allinone-3.xx/ns-3.xx
+    ./build.py --enable-examples --enable-tests
+
+For specific version updates or instructions, check the NS-3 Installation Guide.
+
+Git: Install Git to clone and manage this repository. If Git is not installed:
+
+sudo apt-get install git
+
+NetAnim: To visualize the simulation, you need to install NetAnim. Install it by following these commands:
+
+    sudo apt-get install qt5-qmake qtbase5-dev
+    wget https://www.nsnam.org/release/netanim-3.108.tar.bz2
+    tar xjf netanim-3.108.tar.bz2
+    cd netanim-3.108
+    qmake NetAnim.pro
+    make
+Cloning the Repository
+Clone this repository, which contains the IOT.cc source code:
+
+git clone https://github.com/your-username/NS3-IoT-Simulation.git
+cd NS3-IoT-Simulation
+Setting Up the Project
+Navigate to the NS-3 scratch folder:
+
+cd ~/ns-3/scratch
+Copy the provided IOT.cc file into the scratch folder:
+
+cp ../NS3-IoT-Simulation/IOT.cc .
+Ensure that the IOT.cc file is located in the ~/ns-3/scratch directory.
+
+Building and Running the Simulation
+Build NS-3: You need to build the project in NS-3 after adding the IOT.cc file.
+
+cd ~/ns-3
+./ns3 build
+Run the Simulation: Once the build is complete, you can run the simulation:
+
+./ns3 run scratch/IOT
+Visualizing the Simulation: To visualize the simulation, make sure you have generated the XML output in your simulation file. After the simulation runs, open the animation file using NetAnim:
+
+./NetAnim iot-animation.xml
+Simulation Results
+During the simulation, the UDP Echo Client-Server will send and receive packets between the sensor and cloud nodes.
+The simulation outputs logs with packet send/receive timestamps.
+Troubleshooting
+Compilation Issues:
+
+If you face issues during the build process, make sure all dependencies are installed (as mentioned in the prerequisites).
+If the build fails, check the NS-3 documentation for troubleshooting common build problems.
+NetAnim Visualizer Not Working:
+
+Ensure that NetAnim is correctly installed using the steps above.
+If you get errors regarding missing libraries, check that all dependencies (like qt5-qmake) are installed.
+Network Behavior:
+
+Make sure that the correct nodes, links, and IP addresses are being set up as described in the simulation code.
