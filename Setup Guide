@@ -29,28 +29,28 @@ NetAnim: To visualize the simulation, you need to install NetAnim. Install it by
 Cloning the Repository
 Clone this repository, which contains the IOT.cc source code:
 
-git clone https://github.com/your-username/NS3-IoT-Simulation.git
-cd NS3-IoT-Simulation
-Setting Up the Project
-Navigate to the NS-3 scratch folder:
+    git clone https://github.com/your-username/NS3-IoT-Simulation.git
+    cd NS3-IoT-Simulation
+    Setting Up the Project
+    Navigate to the NS-3 scratch folder:
 
-cd ~/ns-3/scratch
+    cd ~/ns-3/scratch
 Copy the provided IOT.cc file into the scratch folder:
 
-cp ../NS3-IoT-Simulation/IOT.cc .
+    cp ../NS3-IoT-Simulation/IOT.cc .
 Ensure that the IOT.cc file is located in the ~/ns-3/scratch directory.
 
 Building and Running the Simulation
 Build NS-3: You need to build the project in NS-3 after adding the IOT.cc file.
 
-cd ~/ns-3
-./ns3 build
+    cd ~/ns-3
+    ./ns3 build
 Run the Simulation: Once the build is complete, you can run the simulation:
 
-./ns3 run scratch/IOT
+    ./ns3 run scratch/IOT
 Visualizing the Simulation: To visualize the simulation, make sure you have generated the XML output in your simulation file. After the simulation runs, open the animation file using NetAnim:
 
-./NetAnim iot-animation.xml
+    ./NetAnim iot-animation.xml
 Simulation Results
 During the simulation, the UDP Echo Client-Server will send and receive packets between the sensor and cloud nodes.
 The simulation outputs logs with packet send/receive timestamps.
