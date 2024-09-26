@@ -54,6 +54,9 @@ Simulation Flow
 
 8. Output:
    - The simulation outputs trace information, which can be visualized using NetAnim to observe the packet exchange and the movement of the Wi-Fi station node.
+  
+![image](https://github.com/user-attachments/assets/aac3a6d6-98b3-484b-9624-0c83f255496c)
+
 
 What Does the Simulation Model?
 This simulation models a simple IoT network where:
