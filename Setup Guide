@@ -29,7 +29,7 @@ NetAnim: To visualize the simulation, you need to install NetAnim. Install it by
 Cloning the Repository
 Clone this repository, which contains the IOT.cc source code:
 
-    git clone https://github.com/your-username/NS3-IoT-Simulation.git
+    git clone https://github.com/richiekrich/IOT_Simulation.git
     cd NS3-IoT-Simulation
     Setting Up the Project
     Navigate to the NS-3 scratch folder:
