@@ -46,9 +46,10 @@ This guide will help you set up your environment, download the necessary tools, 
 ## Cloning the Repository
 
 Clone this repository, which contains the `IOT.cc` source code:
-git clone https://github.com/richiekrich/IOT_Simulation.git 
-cd NS3-IoT-Simulation
-
+   '''
+   git clone https://github.com/richiekrich/IOT_Simulation.git 
+   cd NS3-IoT-Simulation
+   '''
 ---
 
 ## Setting Up the Project
