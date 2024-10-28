@@ -7,7 +7,7 @@
 #include "ns3/mobility-module.h"
 #include "ns3/netanim-module.h"
 #include "ns3/energy-module.h"
-#include "ns3/flow-monitor-module.h" // For flow monitoring
+#include "ns3/flow-monitor-module.h"
 
 using namespace ns3;
 
@@ -47,13 +47,14 @@ int main(int argc, char *argv[])
     NetDeviceContainer p2pDevices;
     p2pDevices = pointToPoint.Install(sensorNode.Get(0), microcontrollerNode.Get(0));
 
-    // Step 3: Set up WiFi Network between Microcontroller and Cloud Platform
+    // Step 3: Set up Wi-Fi Network between Microcontroller and Cloud Platform
     YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
-    YansWifiPhyHelper wifiPhy;
+    YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default();
     wifiPhy.SetChannel(wifiChannel.Create());
 
     WifiHelper wifi;
-    wifi.SetStandard(WIFI_PHY_STANDARD_80211n_5GHZ);
+    // Comment out SetStandard if causing issues
+    // wifi.SetStandard(WIFI_PHY_STANDARD_80211n_2_4GHZ);
     wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager", "DataMode", StringValue(phyMode));
 
     WifiMacHelper wifiMac;
@@ -75,20 +76,13 @@ int main(int argc, char *argv[])
     MobilityHelper mobility;
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
 
-    // Sensor Node
     mobility.Install(sensorNode);
-
-    // Microcontroller Node
     mobility.Install(microcontrollerNode);
-
-    // Cloud Node
     mobility.Install(cloudNode);
 
     // Step 5: Install Internet Stack and Assign IP Addresses
     InternetStackHelper stack;
-    stack.Install(sensorNode);
-    stack.Install(microcontrollerNode);
-    stack.Install(cloudNode);
+    stack.InstallAll();
 
     Ipv4AddressHelper address;
 
@@ -97,7 +91,7 @@ int main(int argc, char *argv[])
     Ipv4InterfaceContainer sensorMicrocontrollerInterfaces;
     sensorMicrocontrollerInterfaces = address.Assign(p2pDevices);
 
-    // Assign IP addresses to WiFi devices
+    // Assign IP addresses to Wi-Fi devices
     address.SetBase("10.1.2.0", "255.255.255.0");
     Ipv4InterfaceContainer microcontrollerCloudInterfaces;
     microcontrollerCloudInterfaces.Add(address.Assign(apDevice));
@@ -115,7 +109,7 @@ int main(int argc, char *argv[])
 
     // Create a TCP connection from Sensor Node to Cloud Node through Microcontroller
     OnOffHelper onOffHelper("ns3::TcpSocketFactory", sinkAddress);
-    onOffHelper.SetAttribute("DataRate", DataRateValue(DataRate("50Mbps")));
+    onOffHelper.SetAttribute("DataRate", StringValue("50Mbps"));
     onOffHelper.SetAttribute("PacketSize", UintegerValue(1024));
     onOffHelper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
     onOffHelper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
@@ -127,15 +121,27 @@ int main(int argc, char *argv[])
     // Enable routing
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-    // Step 7: Install Energy Model on Sensor Node
+    // Step 7: Install Energy Model on Wi-Fi Devices
+
+    // Install Energy Source on Microcontroller Node
     BasicEnergySourceHelper energySourceHelper;
     energySourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(100.0));
-    EnergySourceContainer energySources = energySourceHelper.Install(sensorNode.Get(0));
+    EnergySourceContainer energySources = energySourceHelper.Install(microcontrollerNode.Get(0));
 
-    // Install Device Energy Model
-    DeviceEnergyModelHelper deviceEnergyModelHelper;
-    deviceEnergyModelHelper.Set("StaticCurrentA", DoubleValue(0.1));
-    deviceEnergyModelHelper.Install(p2pDevices.Get(0), energySources.Get(0));
+    // Install Energy Model on AP Device
+    WifiRadioEnergyModelHelper wifiEnergyModelHelper;
+    wifiEnergyModelHelper.Set("TxCurrentA", DoubleValue(0.0174)); // Example values
+    wifiEnergyModelHelper.Set("RxCurrentA", DoubleValue(0.0197));
+    wifiEnergyModelHelper.Set("IdleCurrentA", DoubleValue(0.273));
+    wifiEnergyModelHelper.Set("SleepCurrentA", DoubleValue(0.033));
+    wifiEnergyModelHelper.Install(apDevice.Get(0), energySources.Get(0));
+
+    // Repeat for Cloud Node if desired
+    // Install Energy Source on Cloud Node
+    // EnergySourceContainer cloudEnergySources = energySourceHelper.Install(cloudNode.Get(0));
+
+    // Install Energy Model on STA Device
+    // wifiEnergyModelHelper.Install(staDevices.Get(0), cloudEnergySources.Get(0));
 
     // Step 8: Install Flow Monitor to gather statistics
     FlowMonitorHelper flowmon;
@@ -164,18 +170,22 @@ int main(int argc, char *argv[])
     Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmon.GetClassifier());
     std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
 
-    for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin(); i != stats.end(); ++i)
+    for (const auto& flow : stats)
     {
-        Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(i->first);
-        NS_LOG_INFO("Flow ID: " << i->first << " Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
-        NS_LOG_INFO("Tx Packets = " << i->second.txPackets);
-        NS_LOG_INFO("Rx Packets = " << i->second.rxPackets);
-        NS_LOG_INFO("Throughput: " << i->second.rxBytes * 8.0 / (i->second.timeLastRxPacket.GetSeconds() - i->second.timeFirstTxPacket.GetSeconds()) / 1024 / 1024 << " Mbps");
+        Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(flow.first);
+        NS_LOG_INFO("Flow ID: " << flow.first << " Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
+        NS_LOG_INFO("Tx Packets = " << flow.second.txPackets);
+        NS_LOG_INFO("Rx Packets = " << flow.second.rxPackets);
+        NS_LOG_INFO("Throughput: "
+                    << flow.second.rxBytes * 8.0 /
+                           (flow.second.timeLastRxPacket.GetSeconds() - flow.second.timeFirstTxPacket.GetSeconds()) /
+                           1024 / 1024
+                    << " Mbps");
     }
 
     // Energy consumption
     double remainingEnergy = energySources.Get(0)->GetRemainingEnergy();
-    NS_LOG_INFO("Remaining energy in the sensor node: " << remainingEnergy << " Joules");
+    NS_LOG_INFO("Remaining energy in the microcontroller node: " << remainingEnergy << " Joules");
 
     Simulator::Destroy();
     NS_LOG_INFO("Simulation finished.");
