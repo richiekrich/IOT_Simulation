@@ -9,6 +9,8 @@
 #include "ns3/energy-module.h"
 #include "ns3/flow-monitor-module.h"
 
+using namespace ns3::energy;
+
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("IoTNetworkSimulation");
@@ -49,7 +51,7 @@ int main(int argc, char *argv[])
 
     // Step 3: Set up Wi-Fi Network between Microcontroller and Cloud Platform
     YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
-    YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default();
+    YansWifiPhyHelper wifiPhy;
     wifiPhy.SetChannel(wifiChannel.Create());
 
     WifiHelper wifi;
@@ -183,7 +185,7 @@ int main(int argc, char *argv[])
                     << " Mbps");
     }
 
-    // Energy consumption
+     // Energy consumption
     double remainingEnergy = energySources.Get(0)->GetRemainingEnergy();
     NS_LOG_INFO("Remaining energy in the microcontroller node: " << remainingEnergy << " Joules");
 
