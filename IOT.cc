@@ -67,7 +67,16 @@ int main(int argc, char *argv[])
     NS_LOG_INFO("Created Cloud Node.");
 
     // ------------------------------
-    // 3. Device and Channel Setup
+    // 3. Internet Stack Installation
+    // ------------------------------
+
+    // Install Internet Stack on all nodes before any device installations
+    InternetStackHelper stack;
+    stack.InstallAll();
+    NS_LOG_INFO("Installed Internet Stack on all nodes.");
+
+    // ------------------------------
+    // 4. Device and Channel Setup
     // ------------------------------
 
     // Set up Point-to-Point Links between Sensor Nodes and Microcontroller
@@ -76,11 +85,30 @@ int main(int argc, char *argv[])
     pointToPoint.SetChannelAttribute("Delay", StringValue(delay));
 
     NetDeviceContainer p2pDevices;
+
+    // Initialize Ipv4AddressHelper for P2P links
+    Ipv4AddressHelper address;
+
+    // Container to hold the interfaces for each P2P link
+    std::vector<Ipv4InterfaceContainer> p2pInterfaces;
+
     for (uint32_t i = 0; i < sensorNodes.GetN(); ++i)
     {
+        // Define a unique subnet for each P2P link to avoid IP overlaps
+        std::ostringstream subnet;
+        subnet << "10.1." << (i + 1) << ".0";
+        address.SetBase(subnet.str().c_str(), "255.255.255.0");
+
+        // Install P2P devices
         NetDeviceContainer link = pointToPoint.Install(sensorNodes.Get(i), microcontrollerNode.Get(0));
         p2pDevices.Add(link);
-        NS_LOG_INFO("Installed Point-to-Point link between Sensor Node " << i + 1 << " and Microcontroller Node.");
+
+        // Assign IP addresses to the P2P link
+        Ipv4InterfaceContainer linkInterfaces = address.Assign(link);
+        p2pInterfaces.push_back(linkInterfaces);
+
+        NS_LOG_INFO("Installed Point-to-Point link between Sensor Node " << i + 1
+                    << " and Microcontroller Node with subnet " << subnet.str() << "/24.");
     }
 
     // Set up Wi-Fi Network between Microcontroller and Cloud Platform
@@ -105,7 +133,18 @@ int main(int argc, char *argv[])
     NS_LOG_INFO("Installed Wi-Fi STA on Cloud Node.");
 
     // ------------------------------
-    // 4. Mobility Setup
+    // 5. IP Address Assignment to Wi-Fi Devices
+    // ------------------------------
+
+    // Assign IP addresses to Wi-Fi devices on a distinct subnet
+    address.SetBase("10.1.100.0", "255.255.255.0"); // Use a distinct subnet for Wi-Fi to avoid overlap
+    Ipv4InterfaceContainer microcontrollerCloudInterfaces;
+    microcontrollerCloudInterfaces.Add(address.Assign(apDevice));
+    microcontrollerCloudInterfaces.Add(address.Assign(staDevices));
+    NS_LOG_INFO("Assigned IP addresses to Wi-Fi devices.");
+
+    // ------------------------------
+    // 6. Mobility Setup
     // ------------------------------
 
     // Install Constant Position Mobility Model on all nodes
@@ -117,30 +156,7 @@ int main(int argc, char *argv[])
     NS_LOG_INFO("Installed Constant Position Mobility Model on all nodes.");
 
     // ------------------------------
-    // 5. Internet Stack and IP Assignment
-    // ------------------------------
-
-    // Install Internet Stack on all nodes
-    InternetStackHelper stack;
-    stack.InstallAll();
-    NS_LOG_INFO("Installed Internet Stack on all nodes.");
-
-    Ipv4AddressHelper address;
-
-    // Assign IP addresses to Point-to-Point devices
-    address.SetBase("10.1.1.0", "255.255.255.0");
-    Ipv4InterfaceContainer sensorMicrocontrollerInterfaces = address.Assign(p2pDevices);
-    NS_LOG_INFO("Assigned IP addresses to Point-to-Point links.");
-
-    // Assign IP addresses to Wi-Fi devices
-    address.SetBase("10.1.2.0", "255.255.255.0");
-    Ipv4InterfaceContainer microcontrollerCloudInterfaces;
-    microcontrollerCloudInterfaces.Add(address.Assign(apDevice));
-    microcontrollerCloudInterfaces.Add(address.Assign(staDevices));
-    NS_LOG_INFO("Assigned IP addresses to Wi-Fi devices.");
-
-    // ------------------------------
-    // 6. Application Setup
+    // 7. Application Setup
     // ------------------------------
 
     // Configure PacketSink on Cloud Node to receive data
@@ -174,7 +190,7 @@ int main(int argc, char *argv[])
     NS_LOG_INFO("Populated Routing Tables.");
 
     // ------------------------------
-    // 7. Energy Model Setup
+    // 8. Energy Model Setup
     // ------------------------------
 
     // Initialize BasicEnergySourceHelper for Microcontroller Node
@@ -226,7 +242,7 @@ int main(int argc, char *argv[])
     }
 
     // ------------------------------
-    // 8. Flow Monitor Setup
+    // 9. Flow Monitor Setup
     // ------------------------------
 
     // Install FlowMonitor on all nodes to gather network statistics
@@ -235,7 +251,7 @@ int main(int argc, char *argv[])
     NS_LOG_INFO("FlowMonitor installed on all nodes.");
 
     // ------------------------------
-    // 9. NetAnim Setup
+    // 10. NetAnim Setup
     // ------------------------------
 
     // Configure NetAnim animation output
@@ -253,7 +269,7 @@ int main(int argc, char *argv[])
     NS_LOG_INFO("NetAnim configuration completed.");
 
     // ------------------------------
-    // 10. Simulation Execution
+    // 11. Simulation Execution
     // ------------------------------
 
     NS_LOG_INFO("Starting enhanced IoT network simulation...");
@@ -261,7 +277,7 @@ int main(int argc, char *argv[])
     Simulator::Run();
 
     // ------------------------------
-    // 11. Flow Monitor Statistics
+    // 12. Flow Monitor Statistics
     // ------------------------------
 
     // Retrieve and display flow statistics
@@ -290,7 +306,7 @@ int main(int argc, char *argv[])
     }
 
     // ------------------------------
-    // 12. Energy Consumption Logging
+    // 13. Energy Consumption Logging
     // ------------------------------
 
     // Log remaining energy of the Microcontroller Node
@@ -305,7 +321,7 @@ int main(int argc, char *argv[])
     }
 
     // ------------------------------
-    // 13. Cleanup and Exit
+    // 14. Cleanup and Exit
     // ------------------------------
 
     Simulator::Destroy();
