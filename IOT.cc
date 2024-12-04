@@ -32,8 +32,8 @@ int main(int argc, char *argv[])
     LogComponentEnable("BasicEnergySource", LOG_LEVEL_INFO);
     LogComponentEnable("FlowMonitor", LOG_LEVEL_INFO);
 
-    // Simulation parameters with default values
-    double simulationTime = 30.0; // Duration of simulation in seconds
+    // Simulation parameters with updated simulation time
+    double simulationTime = 60.0; // Extended duration of simulation in seconds
     uint32_t numSensors = 5;      // Number of sensor nodes
     double failureTime = 15.0;    // Time to simulate node failure (Optional)
     std::string phyMode = "HtMcs7"; // Physical layer mode
@@ -170,10 +170,10 @@ int main(int argc, char *argv[])
 
     // Configure OnOff Applications on Sensor Nodes to send data to Cloud Node
     OnOffHelper onOffHelper("ns3::TcpSocketFactory", sinkAddress);
-    onOffHelper.SetAttribute("DataRate", StringValue("50Mbps"));
-    onOffHelper.SetAttribute("PacketSize", UintegerValue(1024));
-    onOffHelper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    onOffHelper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    onOffHelper.SetAttribute("DataRate", StringValue("50Mbps")); // Ensured alignment with recommendation
+    onOffHelper.SetAttribute("PacketSize", UintegerValue(1024)); // 1 KB packets
+    onOffHelper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]")); // Continuous transmission
+    onOffHelper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]")); // No interruptions
 
     ApplicationContainer sourceApps;
     for (uint32_t i = 0; i < sensorNodes.GetN(); ++i)
@@ -288,20 +288,38 @@ int main(int argc, char *argv[])
     for (const auto& flow : stats)
     {
         Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(flow.first);
-        NS_LOG_INFO("Flow ID: " << flow.first << " Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
-        NS_LOG_INFO("Tx Packets = " << flow.second.txPackets);
-        NS_LOG_INFO("Rx Packets = " << flow.second.rxPackets);
 
-        // Calculate throughput only if the duration is positive to avoid negative values
-        double duration = flow.second.timeLastRxPacket.GetSeconds() - flow.second.timeFirstTxPacket.GetSeconds();
-        if (duration > 0)
+        // Only consider flows from Sensor Nodes to Cloud Node
+        bool isSensorToCloud = false;
+        for (uint32_t i = 1; i <= numSensors; ++i)
         {
-            double throughput = (flow.second.rxBytes * 8.0) / duration / 1024 / 1024; // Mbps
-            NS_LOG_INFO("Throughput: " << throughput << " Mbps");
+            std::ostringstream srcAddr;
+            srcAddr << "10.1." << i << ".1";
+            if (t.sourceAddress == Ipv4Address(srcAddr.str().c_str()) &&
+                t.destinationAddress == microcontrollerCloudInterfaces.GetAddress(1))
+            {
+                isSensorToCloud = true;
+                break;
+            }
         }
-        else
+
+        if (isSensorToCloud)
         {
-            NS_LOG_INFO("Throughput: 0 Mbps");
+            NS_LOG_INFO("Flow ID: " << flow.first << " Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
+            NS_LOG_INFO("Tx Packets = " << flow.second.txPackets);
+            NS_LOG_INFO("Rx Packets = " << flow.second.rxPackets);
+
+            // Calculate throughput only if the duration is positive to avoid negative values
+            double duration = flow.second.timeLastRxPacket.GetSeconds() - flow.second.timeFirstTxPacket.GetSeconds();
+            if (duration > 0)
+            {
+                double throughput = (flow.second.rxBytes * 8.0) / duration / 1024 / 1024; // Mbps
+                NS_LOG_INFO("Throughput: " << throughput << " Mbps");
+            }
+            else
+            {
+                NS_LOG_INFO("Throughput: 0 Mbps");
+            }
         }
     }
 
