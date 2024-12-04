@@ -9,32 +9,32 @@
 #include "ns3/energy-module.h"
 #include "ns3/flow-monitor-module.h"
 
-// Add this line to simplify energy model usage
-using namespace ns3::energy;
-
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("IoTNetworkSimulation");
 
 int main(int argc, char *argv[])
 {
-    // Enable logging
+    // Enable logging for specific components
     LogComponentEnable("IoTNetworkSimulation", LOG_LEVEL_INFO);
+    LogComponentEnable("UdpEchoClientApplication", LOG_LEVEL_INFO);
+    LogComponentEnable("UdpEchoServerApplication", LOG_LEVEL_INFO);
 
     // Simulation parameters
-    double simulationTime = 20.0; // seconds
-    std::string phyMode = "HtMcs7";
-    std::string dataRate = "100Mbps";
-    std::string delay = "1ms";
+    double simulationTime = 30.0; // seconds
+    uint32_t numSensors = 5;      // Number of sensor nodes
+    double failureTime = 15.0;    // Time to simulate node failure
 
     // Parse command line arguments
     CommandLine cmd;
     cmd.AddValue("simulationTime", "Duration of the simulation in seconds", simulationTime);
+    cmd.AddValue("numSensors", "Number of sensor nodes", numSensors);
+    cmd.AddValue("failureTime", "Time to simulate node failure", failureTime);
     cmd.Parse(argc, argv);
 
     // Step 1: Create Nodes
-    NodeContainer sensorNode;
-    sensorNode.Create(1);
+    NodeContainer sensorNodes;
+    sensorNodes.Create(numSensors);
 
     NodeContainer microcontrollerNode;
     microcontrollerNode.Create(1);
@@ -42,13 +42,17 @@ int main(int argc, char *argv[])
     NodeContainer cloudNode;
     cloudNode.Create(1);
 
-    // Step 2: Set up Point-to-Point Link between Sensor and Microcontroller
+    // Step 2: Set up Point-to-Point Links between Sensor Nodes and Microcontroller
     PointToPointHelper pointToPoint;
-    pointToPoint.SetDeviceAttribute("DataRate", StringValue(dataRate));
-    pointToPoint.SetChannelAttribute("Delay", StringValue(delay));
+    pointToPoint.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
+    pointToPoint.SetChannelAttribute("Delay", StringValue("2ms"));
 
     NetDeviceContainer p2pDevices;
-    p2pDevices = pointToPoint.Install(sensorNode.Get(0), microcontrollerNode.Get(0));
+    for (uint32_t i = 0; i < sensorNodes.GetN(); ++i)
+    {
+        NetDeviceContainer link = pointToPoint.Install(sensorNodes.Get(i), microcontrollerNode.Get(0));
+        p2pDevices.Add(link);
+    }
 
     // Step 3: Set up Wi-Fi Network between Microcontroller and Cloud Platform
     YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
@@ -56,28 +60,24 @@ int main(int argc, char *argv[])
     wifiPhy.SetChannel(wifiChannel.Create());
 
     WifiHelper wifi;
-    wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager", "DataMode", StringValue(phyMode));
+    wifi.SetStandard(WIFI_STANDARD_80211n); // Compatible constant for 802.11n
+    wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager", "DataMode", StringValue("HtMcs7"));
 
     WifiMacHelper wifiMac;
 
     // Configure AP (Microcontroller Node)
     Ssid ssid = Ssid("IoT-WiFi");
     wifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
-
-    NetDeviceContainer apDevice;
-    apDevice = wifi.Install(wifiPhy, wifiMac, microcontrollerNode.Get(0));
+    NetDeviceContainer apDevice = wifi.Install(wifiPhy, wifiMac, microcontrollerNode.Get(0));
 
     // Configure STA (Cloud Node)
     wifiMac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid), "ActiveProbing", BooleanValue(false));
-
-    NetDeviceContainer staDevices;
-    staDevices = wifi.Install(wifiPhy, wifiMac, cloudNode.Get(0));
+    NetDeviceContainer staDevices = wifi.Install(wifiPhy, wifiMac, cloudNode.Get(0));
 
     // Step 4: Mobility Models
     MobilityHelper mobility;
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-
-    mobility.Install(sensorNode);
+    mobility.Install(sensorNodes);
     mobility.Install(microcontrollerNode);
     mobility.Install(cloudNode);
 
@@ -86,96 +86,36 @@ int main(int argc, char *argv[])
     stack.InstallAll();
 
     Ipv4AddressHelper address;
-
-    // Assign IP addresses to point-to-point devices
     address.SetBase("10.1.1.0", "255.255.255.0");
-    Ipv4InterfaceContainer sensorMicrocontrollerInterfaces;
-    sensorMicrocontrollerInterfaces = address.Assign(p2pDevices);
+    Ipv4InterfaceContainer sensorMicrocontrollerInterfaces = address.Assign(p2pDevices);
 
-    // Assign IP addresses to Wi-Fi devices
     address.SetBase("10.1.2.0", "255.255.255.0");
     Ipv4InterfaceContainer microcontrollerCloudInterfaces;
     microcontrollerCloudInterfaces.Add(address.Assign(apDevice));
     microcontrollerCloudInterfaces.Add(address.Assign(staDevices));
 
-    // Step 6: Configure Applications
-    uint16_t sinkPort = 8080;
-    Address sinkAddress(InetSocketAddress(microcontrollerCloudInterfaces.GetAddress(1), sinkPort));
-    PacketSinkHelper packetSinkHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), sinkPort));
-    ApplicationContainer sinkApps = packetSinkHelper.Install(cloudNode.Get(0));
-    sinkApps.Start(Seconds(1.0));
-    sinkApps.Stop(Seconds(simulationTime));
+    // Step 6: Install Energy Model
+    ns3::energy::EnergySourceContainer energySources;
 
-    // Create a TCP connection from Sensor Node to Cloud Node through Microcontroller
-    OnOffHelper onOffHelper("ns3::TcpSocketFactory", sinkAddress);
-    onOffHelper.SetAttribute("DataRate", StringValue("50Mbps"));
-    onOffHelper.SetAttribute("PacketSize", UintegerValue(1024));
-    onOffHelper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
-    onOffHelper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    for (uint32_t i = 0; i < sensorNodes.GetN(); ++i)
+    {
+        Ptr<ns3::energy::BasicEnergySource> energySource = CreateObject<ns3::energy::BasicEnergySource>();
+        energySource->SetInitialEnergy(100.0); // Set initial energy for each sensor node
+        sensorNodes.Get(i)->AggregateObject(energySource);
+        energySources.Add(energySource);
+    }
 
-    ApplicationContainer sourceApps = onOffHelper.Install(sensorNode.Get(0));
-    sourceApps.Start(Seconds(2.0));
-    sourceApps.Stop(Seconds(simulationTime));
+    // Step 7: NetAnim Visualization
+    AnimationInterface anim("iot-animation.xml");
+    anim.UpdateNodeDescription(sensorNodes.Get(0), "Sensor Node");
+    anim.SetConstantPosition(sensorNodes.Get(0), 10, 10);
 
-    // Enable routing
-    Ipv4GlobalRoutingHelper::PopulateRoutingTables();
-
-    // Step 7: Install Energy Model on Wi-Fi Devices
-    BasicEnergySourceHelper energySourceHelper;
-    energySourceHelper.Set("BasicEnergySourceInitialEnergyJ", DoubleValue(100.0));
-    EnergySourceContainer energySources = energySourceHelper.Install(microcontrollerNode.Get(0));
-
-    WifiRadioEnergyModelHelper wifiEnergyModelHelper;
-    wifiEnergyModelHelper.Set("TxCurrentA", DoubleValue(0.0174));
-    wifiEnergyModelHelper.Set("RxCurrentA", DoubleValue(0.0197));
-    wifiEnergyModelHelper.Set("IdleCurrentA", DoubleValue(0.273));
-    wifiEnergyModelHelper.Set("SleepCurrentA", DoubleValue(0.033));
-    wifiEnergyModelHelper.Install(apDevice.Get(0), energySources.Get(0));
-
-    // Step 8: Install Flow Monitor to gather statistics
-    FlowMonitorHelper flowmon;
-    Ptr<FlowMonitor> monitor = flowmon.InstallAll();
-
-    // Step 9: Enable NetAnim visualization
-    AnimationInterface anim("iot-network-animation.xml");
-    anim.UpdateNodeDescription(sensorNode.Get(0), "Sensor Node");
-    anim.UpdateNodeDescription(microcontrollerNode.Get(0), "Microcontroller Node");
-    anim.UpdateNodeDescription(cloudNode.Get(0), "Cloud Node");
-
-    anim.SetConstantPosition(sensorNode.Get(0), 10.0, 20.0);
-    anim.SetConstantPosition(microcontrollerNode.Get(0), 20.0, 20.0);
-    anim.SetConstantPosition(cloudNode.Get(0), 30.0, 20.0);
-
-    // Step 10: Run Simulation
-    NS_LOG_INFO("Starting simulation...");
+    // Step 8: Run Simulation
     Simulator::Stop(Seconds(simulationTime));
     Simulator::Run();
 
-    // Flow monitor statistics
-    monitor->CheckForLostPackets();
-    Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier>(flowmon.GetClassifier());
-    std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats();
-
-    for (const auto& flow : stats)
-    {
-        Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow(flow.first);
-        NS_LOG_INFO("Flow ID: " << flow.first << " Src Addr " << t.sourceAddress << " Dst Addr " << t.destinationAddress);
-        NS_LOG_INFO("Tx Packets = " << flow.second.txPackets);
-        NS_LOG_INFO("Rx Packets = " << flow.second.rxPackets);
-        NS_LOG_INFO("Throughput: "
-                    << flow.second.rxBytes * 8.0 /
-                           (flow.second.timeLastRxPacket.GetSeconds() - flow.second.timeFirstTxPacket.GetSeconds()) /
-                           1024 / 1024
-                    << " Mbps");
-    }
-
-    // Energy consumption
-    double remainingEnergy = energySources.Get(0)->GetRemainingEnergy();
-    NS_LOG_INFO("Remaining energy in the microcontroller node: " << remainingEnergy << " Joules");
-
     Simulator::Destroy();
-    NS_LOG_INFO("Simulation finished.");
-
+    NS_LOG_INFO("Simulation completed.");
     return 0;
 }
 
